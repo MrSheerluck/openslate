@@ -116,3 +116,52 @@ async fn health_check(
 
     Ok(axum::Json(serde_json::json!({ "status": "ok" })))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{body::Body, http::Request, routing::get};
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn test_health_check_ok() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("failed to create pool");
+
+        // Mimic the minimum schema expected by the application.
+        sqlx::query("CREATE TABLE IF NOT EXISTS notes (id TEXT)")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let state = AppState {
+            db: pool,
+            client: Client::new_empty(),
+            bucket: String::new(),
+        };
+
+        let app = Router::new()
+            .route("/api/health", get(health_check))
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), axum::http::StatusCode::OK);
+
+        let body: serde_json::Value = axum::body::to_bytes(response.into_body(), 1024)
+            .await
+            .map(|b| serde_json::from_slice(&b).unwrap())
+            .unwrap();
+
+        assert_eq!(body, serde_json::json!({"status": "ok"}));
+    }
+}

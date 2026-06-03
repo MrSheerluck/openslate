@@ -24,3 +24,7 @@ axum-extra = { version = "0.10", features = ["cookie"] }
 jsonwebtoken = "9"
 bcrypt = "0.16"
 time = { version = "0.3", features = ["serde"] }
+
+[dev-dependencies]
+tower = "0.5"
+http-body-util = "0.1"
