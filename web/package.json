@@ -1,43 +1,46 @@
 {
-	"name": "web",
-	"private": true,
-	"version": "0.0.1",
-	"type": "module",
-	"scripts": {
-		"dev": "vite dev",
-		"build": "vite build",
-		"preview": "vite preview",
-		"prepare": "svelte-kit sync || echo ''",
-		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
-	},
-	"dependencies": {
-		"@tiptap/core": "^3.24.0",
-		"@tiptap/extension-code-block-lowlight": "^3.24.0",
-		"@tiptap/extension-highlight": "^3.24.0",
-		"@tiptap/extension-image": "^3.24.0",
-		"@tiptap/extension-link": "^3.24.0",
-		"@tiptap/extension-placeholder": "^3.24.0",
-		"@tiptap/extension-table": "^3.24.0",
-		"@tiptap/extension-task-item": "^3.24.0",
-		"@tiptap/extension-task-list": "^3.24.0",
-		"@tiptap/extension-underline": "^3.24.0",
-		"@tiptap/pm": "^3.24.0",
-		"@tiptap/starter-kit": "^3.24.0",
-		"highlight.js": "^11.11.0",
-		"lowlight": "^3.3.0",
-		"tiptap-markdown": "^0.9.0"
-	},
-	"devDependencies": {
-		"@sveltejs/adapter-auto": "^7.0.1",
-		"@sveltejs/kit": "^2.57.0",
-		"@sveltejs/vite-plugin-svelte": "^7.0.0",
-		"@tailwindcss/typography": "^0.5.19",
-		"@tailwindcss/vite": "^4.3.0",
-		"svelte": "^5.55.2",
-		"svelte-check": "^4.4.6",
-		"tailwindcss": "^4.3.0",
-		"typescript": "^6.0.2",
-		"vite": "^8.0.7"
-	}
+  "name": "web",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "prepare": "svelte-kit sync || echo ''",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@tiptap/core": "^3.24.0",
+    "@tiptap/extension-code-block-lowlight": "^3.24.0",
+    "@tiptap/extension-highlight": "^3.24.0",
+    "@tiptap/extension-image": "^3.24.0",
+    "@tiptap/extension-link": "^3.24.0",
+    "@tiptap/extension-placeholder": "^3.24.0",
+    "@tiptap/extension-table": "^3.24.0",
+    "@tiptap/extension-task-item": "^3.24.0",
+    "@tiptap/extension-task-list": "^3.24.0",
+    "@tiptap/extension-underline": "^3.24.0",
+    "@tiptap/pm": "^3.24.0",
+    "@tiptap/starter-kit": "^3.24.0",
+    "highlight.js": "^11.11.0",
+    "lowlight": "^3.3.0",
+    "tiptap-markdown": "^0.9.0"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-auto": "^7.0.1",
+    "@sveltejs/kit": "^2.57.0",
+    "@sveltejs/vite-plugin-svelte": "^7.0.0",
+    "@tailwindcss/typography": "^0.5.19",
+    "@tailwindcss/vite": "^4.3.0",
+    "svelte": "^5.55.2",
+    "svelte-check": "^4.4.6",
+    "tailwindcss": "^4.3.0",
+    "typescript": "^6.0.2",
+    "vite": "^8.0.7",
+    "vitest": "^3.0.0"
+  }
 }
