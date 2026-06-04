@@ -266,7 +266,6 @@
               onkeydown={(e) => { if (e.key === "Enter") { e.preventDefault(); submitUrlImport(); } }}
               class="w-full text-xs px-2 py-1 rounded outline-none"
               style="color: var(--text-primary); background: var(--bg-editor); border: 1px solid var(--border-input);"
-              autofocus
             />
             <div class="flex gap-1 justify-end">
               <button

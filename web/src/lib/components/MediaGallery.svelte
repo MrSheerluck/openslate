@@ -310,6 +310,8 @@
 
 <!-- Main gallery -->
 <div
+  role="region"
+  aria-label="Media gallery"
   class="flex flex-col h-full"
   ondragover={(e) => { e.preventDefault(); dragOver = true; }}
   ondragleave={() => { dragOver = false; }}
