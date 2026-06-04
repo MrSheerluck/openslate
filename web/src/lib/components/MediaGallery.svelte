@@ -308,8 +308,9 @@
   </div>
 {/if}
 
-<!-- Main gallery -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
+  role="region"
   class="flex flex-col h-full"
   ondragover={(e) => { e.preventDefault(); dragOver = true; }}
   ondragleave={() => { dragOver = false; }}

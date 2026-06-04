@@ -260,6 +260,7 @@
       >
         {#if showUrlInput}
           <div class="flex flex-col gap-1 p-2" style="min-width: 240px;">
+            <!-- svelte-ignore a11y_autofocus -->
             <input
               bind:value={urlInput}
               placeholder="Paste image/video URL..."
