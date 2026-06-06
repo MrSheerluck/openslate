@@ -346,3 +346,146 @@ pub async fn delete_note(
     }
     Ok(StatusCode::NO_CONTENT)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use sqlx::SqlitePool;
+
+    async fn setup_db() -> SqlitePool {
+        let pool = SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("failed to create pool");
+
+        sqlx::query(
+            "CREATE TABLE notes (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                slug TEXT UNIQUE NOT NULL,
+                content TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query(
+            "CREATE TABLE tags (
+                id TEXT PRIMARY KEY,
+                name TEXT UNIQUE NOT NULL
+            )",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query(
+            "CREATE TABLE note_tags (
+                note_id TEXT NOT NULL,
+                tag_id TEXT NOT NULL,
+                PRIMARY KEY (note_id, tag_id)
+            )",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query(
+            "CREATE TABLE note_links (
+                source_note_id TEXT NOT NULL,
+                target_note_id TEXT,
+                PRIMARY KEY (source_note_id, target_note_id)
+            )",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        pool
+    }
+
+    #[tokio::test]
+    async fn test_create_and_get_note() {
+        let db = setup_db().await;
+
+        let create_body = CreateNote {
+            title: "Test Note".into(),
+            content: Some("Hello **world**".into()),
+            tags: Some(vec!["demo".into()]),
+        };
+
+        let (status, slug_json) = create_note(State(db.clone()), Json(create_body))
+            .await
+            .unwrap();
+        assert_eq!(status, StatusCode::CREATED);
+        let slug = slug_json.get("slug").unwrap().as_str().unwrap().to_string();
+
+        let note = get_note(State(db), Path(slug)).await.unwrap();
+        assert_eq!(note.title, "Test Note");
+        assert_eq!(note.content, "Hello **world**");
+        assert_eq!(note.tags, vec!["demo"]);
+    }
+
+    #[tokio::test]
+    async fn test_update_note() {
+        let db = setup_db().await;
+
+        // Create
+        let create = CreateNote {
+            title: "Original".into(),
+            content: None,
+            tags: None,
+        };
+        let (_, slug_json) = create_note(State(db.clone()), Json(create))
+            .await
+            .unwrap();
+        let slug = slug_json.get("slug").unwrap().as_str().unwrap().to_string();
+
+        // Update
+        let update = UpdateNote {
+            title: Some("Updated".into()),
+            content: Some("New content".into()),
+            tags: Some(vec!["updated".into()]),
+        };
+        
+        // NOTE: Since updating the title automatically updates the note's slug in the backend,
+        // we need to capture the newly generated slug from the response.
+        let updated_slug_json = update_note(State(db.clone()), Path(slug), Json(update))
+            .await
+            .unwrap();
+
+        let new_slug = updated_slug_json.get("slug").unwrap().as_str().unwrap().to_string();
+
+        // Verify
+        // We use the 'new_slug' here because the old one ("original") no longer exists.
+        let note = get_note(State(db), Path(new_slug)).await.unwrap();
+        assert_eq!(note.title, "Updated");
+        assert_eq!(note.content, "New content");
+        assert_eq!(note.tags, vec!["updated"]);
+    }
+
+    #[tokio::test]
+    async fn test_delete_note() {
+        let db = setup_db().await;
+
+        let create = CreateNote {
+            title: "To Delete".into(),
+            content: None,
+            tags: None,
+        };
+        let (_, slug_json) = create_note(State(db.clone()), Json(create))
+            .await
+            .unwrap();
+        let slug = slug_json.get("slug").unwrap().as_str().unwrap().to_string();
+
+        delete_note(State(db.clone()), Path(slug.clone()))
+            .await
+            .unwrap();
+
+        let result = get_note(State(db), Path(slug)).await;
+        assert!(result.is_err());
+    }
+}
