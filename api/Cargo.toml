@@ -24,3 +24,4 @@ axum-extra = { version = "0.10", features = ["cookie"] }
 jsonwebtoken = "9"
 bcrypt = "0.16"
 time = { version = "0.3", features = ["serde"] }
+serial_test = "3.5.0"
