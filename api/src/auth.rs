@@ -106,10 +106,9 @@ mod tests {
     fn setup_env() {
         unsafe {
             // Use a well-known hash for "password123"
-            std::env::set_var(
-                "ADMIN_PASSWORD_HASH",
-                "$2b$12$LJ3m4ys3Lk0TSwHlOR7cY.VUK9E2J1OZ0R5qJ0fKj6F3bQ1cJ2qK",
-            );
+            let hash = bcrypt::hash("password123", bcrypt::DEFAULT_COST)
+                .expect("failed to hash test password");
+            std::env::set_var("ADMIN_PASSWORD_HASH", hash);
             std::env::set_var("JWT_SECRET", "test-secret");
         }
     }
