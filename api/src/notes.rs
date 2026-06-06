@@ -428,7 +428,10 @@ mod tests {
         assert_eq!(note.content, "Hello **world**");
         assert_eq!(note.tags, vec!["demo"]);
     }
-
+    /// Integration test for validating the Notes CRUD operations.
+    /// 
+    /// This test verifies creating a note, updating its title, content, and tags,
+    /// and ensures that the newly generated slug is correctly handled during verification.
     #[tokio::test]
     async fn test_update_note() {
         let db = setup_db().await;
