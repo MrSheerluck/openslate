@@ -96,3 +96,44 @@ pub async fn auth_middleware(
 pub async fn me() -> Json<serde_json::Value> {
     Json(json!({ "authenticated": true }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::Json;
+    use serde_json::json;
+
+    fn setup_env() {
+        unsafe {
+            // Use a well-known hash for "password123"
+            std::env::set_var(
+                "ADMIN_PASSWORD_HASH",
+                "$2b$12$LJ3m4ys3Lk0TSwHlOR7cY.VUK9E2J1OZ0R5qJ0fKj6F3bQ1cJ2qK",
+            );
+            std::env::set_var("JWT_SECRET", "test-secret");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_login_success() {
+        setup_env();
+        let jar = CookieJar::new();
+        let body = Json(LoginBody {
+            password: "password123".to_string(),
+        });
+        let (_, response) = login(jar, body).await.unwrap();
+        assert_eq!(response.0.get("success"), Some(&json!(true)));
+    }
+
+    #[tokio::test]
+    async fn test_login_wrong_password() {
+        setup_env();
+        let jar = CookieJar::new();
+        let body = Json(LoginBody {
+            password: "wrongpass".to_string(),
+        });
+        let result = login(jar, body).await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), StatusCode::UNAUTHORIZED);
+    }
+}
