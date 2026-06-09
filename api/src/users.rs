@@ -161,7 +161,9 @@ mod tests {
         let state = app_state(db);
         let jar = CookieJar::default();
 
-        let body = Json(AuthBody { password: "pass".into() });
+        let body = Json(AuthBody {
+            password: "pass".into(),
+        });
         signup(jar, State(state.clone()), body).await.unwrap();
 
         let Json(json) = status(State(state)).await;
