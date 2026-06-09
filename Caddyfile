@@ -1,4 +1,4 @@
-{$DOMAIN::8080} {
+{$DOMAIN:{CADDY_PORT}} {
 	handle /api/* {
 		reverse_proxy localhost:3001
 	}

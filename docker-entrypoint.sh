@@ -3,6 +3,7 @@ set -e
 
 trap 'kill $API_PID 2>/dev/null; exit' TERM INT
 
+export CADDY_PORT=${PORT:-8080}
 echo "Starting API server..."
 /usr/local/bin/api &
 API_PID=$!

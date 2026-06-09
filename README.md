@@ -35,6 +35,19 @@ Full documentation is in the [docs/](docs/index.md) directory:
 
 ## Deploy
 
+### Docker (local or any VPS)
+
+```bash
+# Clone the repo, set your secret, and start:
+git clone https://github.com/MrSheerluck/openslate.git
+cd openslate
+cp .env.example .env
+# Edit .env — at minimum set JWT_SECRET
+docker compose up -d
+```
+
+Your app is live at `http://localhost:8080`. Works on any host with Docker — DigitalOcean, Vultr, Hetzner, your own server, etc.
+
 ### DigitalOcean (or any Ubuntu VPS)
 
 **1. Create a Droplet**
@@ -73,6 +86,12 @@ cd /opt/openslate && docker compose up -d
 ```
 
 Caddy auto-provisions a Let's Encrypt TLS certificate. Access your notes at `https://notes.example.com`.
+
+### Render (one-click)
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/MrSheerluck/openslate)
+
+Click the button above to deploy on Render. Uses the attached persistent disk for SQLite by default; switch to Turso by editing `DATABASE_URL` and `TURSO_AUTH_TOKEN` env vars in the Render dashboard.
 
 ## Development
 
