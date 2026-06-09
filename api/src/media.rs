@@ -256,15 +256,15 @@ pub async fn list_media(
         db_params.push(note_id.as_str().into());
     }
 
-    if let Some(ref q) = params.q {
-        if !q.is_empty() {
-            if db_params.is_empty() {
-                sql.push_str(" WHERE m.original_name LIKE ?");
-            } else {
-                sql.push_str(" AND m.original_name LIKE ?");
-            }
-            db_params.push(format!("%{}%", q).into());
+    if let Some(ref q) = params.q
+        && !q.is_empty()
+    {
+        if db_params.is_empty() {
+            sql.push_str(" WHERE m.original_name LIKE ?");
+        } else {
+            sql.push_str(" AND m.original_name LIKE ?");
         }
+        db_params.push(format!("%{}%", q).into());
     }
 
     sql.push_str(" ORDER BY m.created_at DESC LIMIT 50");

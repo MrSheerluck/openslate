@@ -70,7 +70,7 @@ impl LibsqlDatabase {
 
     pub async fn scalar_str_opt(&self, sql: &str, params: &[DbParam]) -> DbResult<Option<String>> {
         let rows = self.query_rows(sql, params).await?;
-        Ok(rows.first().map(|r| r.first_str()).transpose()?)
+        rows.first().map(|r| r.first_str()).transpose()
     }
 
     pub async fn scalar_str_all(&self, sql: &str, params: &[DbParam]) -> DbResult<Vec<String>> {
