@@ -34,7 +34,8 @@ Copy `api/.env.example` to `api/.env` and configure:
 
 | Variable | Description | Default |
 |---|---|---|
-| `DATABASE_URL` | SQLite database path | `sqlite:data.db` |
+| `DATABASE_URL` | SQLite path or Turso libsql:// URL | `sqlite:data.db?mode=rwc` |
+| `TURSO_AUTH_TOKEN` | Turso auth token (only with `--features backend-turso`) | - |
 | `JWT_SECRET` | Secret for signing JWT tokens | (generate a random string) |
 | `ADMIN_PASSWORD` | Password for login | (choose a strong one) |
 | `ADMIN_PASSWORD_HASH` | bcrypt hash of password | (auto-generated from ADMIN_PASSWORD) |
@@ -44,9 +45,10 @@ Copy `api/.env.example` to `api/.env` and configure:
 
 ```
 openslate/
-├── api/              # Rust backend (Axum + SQLite)
+├── api/              # Rust backend (Axum + SQLite/Turso)
 │   ├── migrations/   # SQL migrations
 │   ├── src/          # Route handlers and DB logic
+│   │   ├── db/       # Database abstraction (sqlx + libsql backends)
 │   │   ├── main.rs
 │   │   ├── auth.rs
 │   │   ├── notes.rs
@@ -70,7 +72,7 @@ openslate/
 
 ## Code Style
 
-- **Rust:** Follow `cargo fmt` conventions. Use `sqlx::query_as` for typed rows. Prefer `map_err` + `StatusCode` over unwrap/panic in route handlers.
+- **Rust:** Follow `cargo fmt` conventions. Database queries must go through the `Database` enum (`db.execute()`, `db.row_all()`, etc.)  --  never use `sqlx` directly. Prefer `map_err` + `StatusCode` over unwrap/panic in route handlers.
 - **TypeScript/Svelte:** Use Svelte 5 Runes (`$state`, `$derived`, `$effect`, `$props`). No classes - use module-level functions and runes. Type everything with TypeScript.
 - **CSS:** Tailwind utility classes + CSS custom properties for theming. Don't add new color literals - use theme variables.
 
@@ -82,8 +84,10 @@ openslate/
 4. **Test your changes** - verify the app still builds and runs:
 
 ```bash
-cd api && cargo build      # backend compiles
-cd web && bun run check    # frontend type-checks
+cd api && cargo build                        # backend compiles (SQLite)
+cd api && cargo build --features backend-turso  # backend compiles (Turso)
+cd api && cargo test                         # run tests
+cd web && bun run check                      # frontend type-checks
 ```
 
 (We don't have automated tests yet - help add them!)

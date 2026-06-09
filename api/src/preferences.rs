@@ -1,35 +1,55 @@
 use axum::{Json, extract::State, http::StatusCode};
 use serde::Deserialize;
 use serde_json::{Value, json};
-use sqlx::SqlitePool;
+
+use crate::AppState;
+use crate::db::{self, FromRow, Row};
 
 #[derive(Deserialize)]
 pub struct UpdatePreferences {
     pub theme: Option<String>,
 }
 
-pub async fn get_preferences(State(db): State<SqlitePool>) -> Result<Json<Value>, StatusCode> {
-    let rows: Vec<(String, String)> = sqlx::query_as("SELECT key, value FROM preferences")
-        .fetch_all(&db)
+struct PrefRow {
+    key: String,
+    value: String,
+}
+
+impl FromRow for PrefRow {
+    fn from_row(row: &Row) -> db::DbResult<Self> {
+        Ok(Self {
+            key: row.str("key")?,
+            value: row.str("value")?,
+        })
+    }
+}
+
+pub async fn get_preferences(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
+    let rows = state
+        .db
+        .row_all::<PrefRow>("SELECT key, value FROM preferences", &[])
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let mut map = serde_json::Map::new();
-    for (key, value) in rows {
-        map.insert(key, Value::String(value));
+    for row in rows {
+        map.insert(row.key, Value::String(row.value));
     }
 
     Ok(Json(Value::Object(map)))
 }
 
 pub async fn update_preferences(
-    State(db): State<SqlitePool>,
+    State(state): State<AppState>,
     Json(body): Json<UpdatePreferences>,
 ) -> Result<Json<Value>, StatusCode> {
     if let Some(theme) = &body.theme {
-        sqlx::query("INSERT OR REPLACE INTO preferences (key, value) VALUES ('theme', ?)")
-            .bind(theme)
-            .execute(&db)
+        state
+            .db
+            .execute(
+                "INSERT OR REPLACE INTO preferences (key, value) VALUES ('theme', ?)",
+                &[theme.as_str().into()],
+            )
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     }
@@ -40,32 +60,37 @@ pub async fn update_preferences(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sqlx::SqlitePool;
+    use crate::db::{self, Database};
 
-    async fn setup_db() -> SqlitePool {
-        let pool = SqlitePool::connect("sqlite::memory:")
-            .await
-            .expect("failed to create pool");
+    async fn setup_db() -> Database {
+        let db = db::SqlxDatabase::new("sqlite::memory:").await;
+        let db = Database::Sqlite(db);
 
-        sqlx::query(
+        db.execute(
             "CREATE TABLE preferences (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             )",
+            &[],
         )
-        .execute(&pool)
         .await
         .unwrap();
 
-        pool
+        db
     }
 
     #[tokio::test]
     async fn test_set_and_get_theme() {
         let db = setup_db().await;
 
+        let state = crate::AppState {
+            db: db.clone(),
+            client: None,
+            bucket: None,
+        };
+
         let _ = update_preferences(
-            State(db.clone()),
+            State(state.clone()),
             Json(UpdatePreferences {
                 theme: Some("dark".into()),
             }),
@@ -73,14 +98,19 @@ mod tests {
         .await
         .unwrap();
 
-        let prefs = get_preferences(State(db)).await.unwrap();
+        let prefs = get_preferences(State(state)).await.unwrap();
         assert_eq!(prefs.get("theme").unwrap(), &json!("dark"));
     }
 
     #[tokio::test]
     async fn test_get_empty_preferences() {
         let db = setup_db().await;
-        let prefs = get_preferences(State(db)).await.unwrap();
+        let state = crate::AppState {
+            db,
+            client: None,
+            bucket: None,
+        };
+        let prefs = get_preferences(State(state)).await.unwrap();
         assert!(prefs.as_object().unwrap().is_empty());
     }
 }

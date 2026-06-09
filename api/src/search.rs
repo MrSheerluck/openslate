@@ -4,14 +4,16 @@ use axum::{
     http::StatusCode,
 };
 use serde::{Deserialize, Serialize};
-use sqlx::SqlitePool;
+
+use crate::AppState;
+use crate::db::{self, FromRow, Row};
 
 #[derive(Deserialize)]
 pub struct SearchParams {
     q: String,
 }
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub struct SearchResult {
     id: String,
     title: String,
@@ -20,6 +22,20 @@ pub struct SearchResult {
     updated_at: String,
     title_highlight: Option<String>,
     content_snippet: Option<String>,
+}
+
+impl FromRow for SearchResult {
+    fn from_row(row: &Row) -> db::DbResult<Self> {
+        Ok(Self {
+            id: row.str("id")?,
+            title: row.str("title")?,
+            slug: row.str("slug")?,
+            created_at: row.str("created_at")?,
+            updated_at: row.str("updated_at")?,
+            title_highlight: row.opt_str("title_highlight")?,
+            content_snippet: row.opt_str("content_snippet")?,
+        })
+    }
 }
 
 fn build_fts_query(raw: &str) -> String {
@@ -37,7 +53,7 @@ fn build_fts_query(raw: &str) -> String {
 }
 
 pub async fn search_notes(
-    State(db): State<SqlitePool>,
+    State(state): State<AppState>,
     Query(params): Query<SearchParams>,
 ) -> Result<Json<Vec<SearchResult>>, StatusCode> {
     let query = params.q.trim();
@@ -47,20 +63,21 @@ pub async fn search_notes(
 
     let fts_query = build_fts_query(query);
 
-    let results = sqlx::query_as::<_, SearchResult>(
-        "SELECT n.id, n.title, n.slug, n.created_at, n.updated_at,
-                highlight(notes_fts, 1, '<mark>', '</mark>') as title_highlight,
-                snippet(notes_fts, 2, '<mark>', '</mark>', '...', 64) as content_snippet
-         FROM notes_fts
-         JOIN notes n ON n.id = notes_fts.id
-         WHERE notes_fts MATCH ?
-         ORDER BY rank
-         LIMIT 20",
-    )
-    .bind(&fts_query)
-    .fetch_all(&db)
-    .await
-    .unwrap_or_default();
+    let results = state
+        .db
+        .row_all::<SearchResult>(
+            "SELECT n.id, n.title, n.slug, n.created_at, n.updated_at,
+                    highlight(notes_fts, 1, '<mark>', '</mark>') as title_highlight,
+                    snippet(notes_fts, 2, '<mark>', '</mark>', '...', 64) as content_snippet
+             FROM notes_fts
+             JOIN notes n ON n.id = notes_fts.id
+             WHERE notes_fts MATCH ?
+             ORDER BY rank
+             LIMIT 20",
+            &[fts_query.into()],
+        )
+        .await
+        .unwrap_or_default();
 
     Ok(Json(results))
 }
@@ -68,17 +85,13 @@ pub async fn search_notes(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sqlx::SqlitePool;
-    use sqlx::sqlite::SqlitePoolOptions;
+    use crate::db::Database;
 
-    async fn setup_db() -> SqlitePool {
-        let pool = SqlitePoolOptions::new()
-            .max_connections(1)
-            .connect("sqlite::memory:")
-            .await
-            .expect("failed to create pool");
+    async fn setup_db() -> Database {
+        let db = db::SqlxDatabase::new("sqlite::memory:").await;
+        let db = Database::Sqlite(db);
 
-        sqlx::query(
+        db.execute(
             "CREATE TABLE notes (
                 id TEXT PRIMARY KEY,
                 title TEXT NOT NULL,
@@ -87,48 +100,55 @@ mod tests {
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at TEXT NOT NULL DEFAULT (datetime('now'))
             )",
+            &[],
         )
-        .execute(&pool)
         .await
         .unwrap();
 
-        sqlx::query(
+        db.execute(
             "CREATE VIRTUAL TABLE notes_fts USING fts5(
                 id UNINDEXED,
                 title,
                 content,
                 tokenize='porter unicode61'
             )",
+            &[],
         )
-        .execute(&pool)
         .await
         .unwrap();
 
-        sqlx::query(
+        db.execute(
             "CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN
                 INSERT INTO notes_fts (id, title, content) VALUES (new.id, new.title, new.content);
             END",
+            &[],
         )
-        .execute(&pool)
         .await
         .unwrap();
 
-        // Insert a sample note (trigger populates notes_fts)
-        sqlx::query(
+        db.execute(
             "INSERT INTO notes (id, title, slug, content) VALUES ('1', 'Hello World', 'hello-world', 'This is a test note')",
+            &[],
         )
-        .execute(&pool)
         .await
         .unwrap();
 
-        pool
+        db
     }
 
     #[tokio::test]
     async fn test_search_finds_matching() {
         let db = setup_db().await;
         let params = SearchParams { q: "hello".into() };
-        let results = search_notes(State(db), Query(params)).await.unwrap();
+
+        // Build a state manually for testing
+        let state = crate::AppState {
+            db,
+            client: None,
+            bucket: None,
+        };
+
+        let results = search_notes(State(state), Query(params)).await.unwrap();
         assert!(!results.is_empty());
         assert_eq!(results[0].title, "Hello World");
     }
@@ -137,7 +157,13 @@ mod tests {
     async fn test_search_empty_query() {
         let db = setup_db().await;
         let params = SearchParams { q: "".into() };
-        let results = search_notes(State(db), Query(params)).await.unwrap();
+
+        let state = crate::AppState {
+            db,
+            client: None,
+            bucket: None,
+        };
+        let results = search_notes(State(state), Query(params)).await.unwrap();
         assert!(results.is_empty());
     }
 
@@ -147,7 +173,13 @@ mod tests {
         let params = SearchParams {
             q: "zzznotfound".into(),
         };
-        let results = search_notes(State(db), Query(params)).await.unwrap();
+
+        let state = crate::AppState {
+            db,
+            client: None,
+            bucket: None,
+        };
+        let results = search_notes(State(state), Query(params)).await.unwrap();
         assert!(results.is_empty());
     }
 }

@@ -6,11 +6,11 @@ OpenSlate is a self-hosted markdown note-taking app. Fast, simple, private. Acce
 
 ## Getting Started
 
-- [Setup Guide](setup.md) — Prerequisites, environment variables, running locally
-- [Architecture](architecture.md) — Project structure, data flow, design decisions
-- [Features](features.md) — Editor, tags, search, media, themes, shortcuts
-- [API Reference](api-reference.md) — Full REST API endpoint documentation
-- [Deployment](deployment.md) — Coming soon
+- [Setup Guide](setup.md)  --  Prerequisites, environment variables, running locally
+- [Architecture](architecture.md)  --  Project structure, data flow, design decisions
+- [Features](features.md)  --  Editor, tags, search, media, themes, shortcuts
+- [API Reference](api-reference.md)  --  Full REST API endpoint documentation
+- [Deployment](deployment.md)  --  Coming soon
 
 ## Tech Stack
 
