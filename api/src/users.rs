@@ -129,3 +129,41 @@ pub async fn change_password(
 
     Ok(Json(json!({ "success": true })))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::extract::State;
+    use serial_test::serial;
+    use sqlx::SqlitePool;
+
+    async fn setup_db() -> SqlitePool {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!().run(&pool).await.unwrap();
+        pool
+    }
+
+    fn app_state(db: SqlitePool) -> crate::AppState {
+        crate::AppState {
+            db,
+            client: None,
+            bucket: None,
+        }
+    }
+
+    // #105
+    #[tokio::test]
+    #[serial]
+    async fn test_status_after_signup() {
+        unsafe { std::env::set_var("JWT_SECRET", "test_secret") };
+        let db = setup_db().await;
+        let state = app_state(db);
+        let jar = CookieJar::default();
+
+        let body = Json(AuthBody { password: "pass".into() });
+        signup(jar, State(state.clone()), body).await.unwrap();
+
+        let Json(json) = status(State(state)).await;
+        assert_eq!(json["has_users"], true);
+    }
+}
