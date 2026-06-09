@@ -138,7 +138,7 @@ Get a single note with tags and backlinks.
 
 ### `PUT /api/notes/{slug}`
 
-Update a note. All fields optional — only provided fields are updated.
+Update a note. All fields optional  --  only provided fields are updated.
 
 **Request body:**
 ```json

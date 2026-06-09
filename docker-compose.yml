@@ -1,6 +1,9 @@
 services:
   openslate:
-    build: .
+    build:
+      context: .
+      args:
+        BUILD_FEATURES: ${BUILD_FEATURES:-backend-sqlx}
     ports:
       - "8080:8080"                        # local dev / IP-only
       # - "80:80"                           # uncomment for custom domain + HTTPS
@@ -9,6 +12,8 @@ services:
       - data:/data
     environment:
       - JWT_SECRET=${JWT_SECRET}
+      - DATABASE_URL=${DATABASE_URL:-sqlite:/data/data.db?mode=rwc}
+      - TURSO_AUTH_TOKEN=${TURSO_AUTH_TOKEN:-}
       - DOMAIN=${DOMAIN}
       - R2_BUCKET=${R2_BUCKET}
       - R2_ACCOUNT_ID=${R2_ACCOUNT_ID}

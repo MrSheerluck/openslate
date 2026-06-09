@@ -19,10 +19,10 @@ The editor exports/imports markdown via `tiptap-markdown`. You can paste markdow
 
 ### File Handling
 
-- **Paste** images from clipboard — auto-uploads to R2
+- **Paste** images from clipboard  --  auto-uploads to R2
 - **Drag and drop** images/files into the editor
 - **Media picker** for inserting previously uploaded files
-- **Import from URL** — paste a URL to fetch and store a remote file
+- **Import from URL**  --  paste a URL to fetch and store a remote file
 
 ## Tags
 
@@ -53,7 +53,7 @@ Upload, browse, and manage files.
 - **Filter** by type: image, video, PDF, or all
 - **Delete** files from R2 and database
 - **Copy link** to clipboard for embedding in notes
-- **Import from URL** — paste a remote URL to download and store a file
+- **Import from URL**  --  paste a remote URL to download and store a file
 
 ## Themes
 

@@ -5,7 +5,14 @@
 # After deploy, SSH into the server and edit /opt/openslate/.env to set:
 #   DOMAIN=your-domain.com       # enables HTTPS via Caddy
 #   R2_BUCKET=...                # enables media uploads
-# Then run: cd /opt/openslate && docker compose up -d
+#
+# For Turso (distributed SQLite), additionally set:
+#   DATABASE_URL=libsql://your-db.turso.io
+#   TURSO_AUTH_TOKEN=your-token-here
+#   BUILD_FEATURES=backend-turso
+# Then rebuild: cd /opt/openslate && docker compose build && docker compose up -d
+#
+# For local SQLite (default), no further configuration is needed.
 
 package_update: true
 package_upgrade: true

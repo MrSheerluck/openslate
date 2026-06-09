@@ -4,6 +4,8 @@
 
 OpenSlate is a single-user, self-hosted note-taking app with a SvelteKit frontend and a Rust/Axum backend. Notes are stored as rich text (Tiptap's JSON format) in SQLite, with full-text search via FTS5. Media files are stored on Cloudflare R2.
 
+The database layer is abstracted behind a `Database` enum  --  the same application code supports both local SQLite (via `sqlx`) and Turso distributed SQLite (via `libsql`). Switching is a one-line config change and a compile flag. See the [Setup Guide](setup.md) for details.
+
 ```
 [Browser] ──► [SvelteKit SPA] ──► [Axum API :3001] ──► [SQLite]
                       │                    │
@@ -12,7 +14,7 @@ OpenSlate is a single-user, self-hosted note-taking app with a SvelteKit fronten
               [Tiptap Editor]
 ```
 
-- The frontend is a **single-page application** — all note editing, search, and media management happens on one page (`/`).
+- The frontend is a **single-page application**  --  all note editing, search, and media management happens on one page (`/`).
 - The backend exposes a **REST API** on port 3001.
 - Authentication uses a **JWT stored in an httpOnly cookie** (30-day expiry).
 - The frontend proxies API requests during development via Vite's env config.
@@ -23,7 +25,10 @@ OpenSlate is a single-user, self-hosted note-taking app with a SvelteKit fronten
 api/src/
 ├── main.rs          # Entry point, router, CORS, app state
 ├── config.rs        # Environment variable loading
-├── db.rs            # SQLite pool creation, migration runner
+├── db/
+│   ├── mod.rs       # Database enum, DbParam, Row, FromRow trait, migrations
+│   ├── sqlx_db.rs   # Local SQLite backend (via sqlx)
+│   └── libsql_db.rs # Turso/libsql backend (via libsql crate)
 ├── auth.rs          # Login/logout, JWT middleware, /api/auth/me
 ├── notes.rs         # CRUD for notes, link parsing, backlinks
 ├── search.rs        # Full-text search via FTS5
@@ -104,9 +109,14 @@ media (id TEXT PK, filename, original_name, mime_type, size, note_id FK NULLABLE
 media_tags (media_id FK → media, tag_id FK → tags, composite PK)
 preferences (key TEXT PK, value TEXT)
 notes_fts (FTS5 virtual table on title + content)
+_migrations (name TEXT PK, applied_at)    -- migration tracking
 ```
 
-All primary keys are UUIDs (v4). Timestamps are ISO 8601 text (SQLite has no native datetime type). Foreign keys cascade on delete where appropriate. `note_links.target_note_id` is nullable — links to not-yet-created notes remain pending and resolve when the target is created.
+All primary keys are UUIDs (v4). Timestamps are ISO 8601 text (SQLite has no native datetime type). Foreign keys cascade on delete where appropriate. `note_links.target_note_id` is nullable  --  links to not-yet-created notes remain pending and resolve when the target is created.
+
+## Design Decisions
+
+**Database abstraction:** A `Database` enum wraps either `SqlxDatabase` (local) or `LibsqlDatabase` (Turso). The choice is made at startup based on `DATABASE_URL`: `libsql://` URLs use Turso, everything else uses local SQLite. The rest of the application is completely agnostic  --  all queries go through the same `db.execute()`, `db.row_all()`, etc. methods.
 
 ## Design Decisions
 
@@ -116,6 +126,6 @@ All primary keys are UUIDs (v4). Timestamps are ISO 8601 text (SQLite has no nat
 
 **SPA over SSR:** The app is fully client-side (`ssr = false` in layout). No server rendering needed since all data is behind authentication and highly interactive (editor, command palette).
 
-**JWT in httpOnly cookies over Bearer tokens:** Simpler for a SPA — no need to manage tokens in JavaScript. Cookie is sent automatically. Protects against XSS token theft.
+**JWT in httpOnly cookies over Bearer tokens:** Simpler for a SPA  --  no need to manage tokens in JavaScript. Cookie is sent automatically. Protects against XSS token theft.
 
 **Single user only:** Eliminates complexity of user management, permissions, sharing. The admin password is configured via environment variable.

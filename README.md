@@ -19,7 +19,7 @@ A self-hosted markdown note-taking app. Fast, simple, private. Access your notes
 
 - **Frontend:** SvelteKit + Tailwind CSS + Tiptap
 - **Backend:** Rust (Axum)
-- **Database:** SQLite
+- **Database:** SQLite  --  local file or [Turso](https://turso.tech/) (distributed, zero-ops)
 - **Auth:** JWT via httpOnly cookies
 - **Media:** Cloudflare R2
 
@@ -27,11 +27,11 @@ A self-hosted markdown note-taking app. Fast, simple, private. Access your notes
 
 Full documentation is in the [docs/](docs/index.md) directory:
 
-- [Setup Guide](docs/setup.md) — Prerequisites, env vars, running locally
-- [Architecture](docs/architecture.md) — Project structure, data flow, design decisions
-- [Features](docs/features.md) — Editor, tags, search, media, themes
-- [API Reference](docs/api-reference.md) — Full REST API docs
-- [Deployment](docs/deployment.md) — Coming soon
+- [Setup Guide](docs/setup.md)  --  Prerequisites, env vars, running locally
+- [Architecture](docs/architecture.md)  --  Project structure, data flow, design decisions
+- [Features](docs/features.md)  --  Editor, tags, search, media, themes
+- [API Reference](docs/api-reference.md)  --  Full REST API docs
+- [Deployment](docs/deployment.md)  --  Coming soon
 
 ## Deploy
 
@@ -53,11 +53,20 @@ R2_BUCKET=my-bucket            # enables image/file uploads
 R2_ACCOUNT_ID=abc123
 R2_ACCESS_KEY=abc123
 R2_SECRET_KEY=abc123
+
+# Or switch to Turso (distributed SQLite):
+# DATABASE_URL=libsql://your-db.turso.io
+# TURSO_AUTH_TOKEN=your-token-here
+# BUILD_FEATURES=backend-turso
+```
+For Turso, after setting the env vars, also rebuild:
+```bash
+cd /opt/openslate && docker compose build && docker compose up -d
 ```
 
 **3. Enable HTTPS (if you set DOMAIN)**
 
-Edit `/opt/openslate/docker-compose.yml` — comment out `8080:8080` and uncomment `80:80` + `443:443`. Then point your domain's DNS A record to the Droplet IP.
+Edit `/opt/openslate/docker-compose.yml`  --  comment out `8080:8080` and uncomment `80:80` + `443:443`. Then point your domain's DNS A record to the Droplet IP.
 
 ```bash
 cd /opt/openslate && docker compose up -d
@@ -68,7 +77,11 @@ Caddy auto-provisions a Let's Encrypt TLS certificate. Access your notes at `htt
 ## Development
 
 ```bash
+# Local SQLite (default):
 cd api && cargo run
+
+# Turso (distributed):
+cd api && cargo run --features backend-turso
 ```
 
 ```bash
