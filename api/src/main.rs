@@ -7,7 +7,6 @@ mod preferences;
 mod search;
 mod users;
 
-use axum::extract::FromRef;
 use axum::http::Method;
 use axum::{Router, middleware, routing::get};
 use s3::{Auth, Client, Credentials, providers};
@@ -15,15 +14,9 @@ use tower_http::cors::AllowOrigin;
 
 #[derive(Clone)]
 struct AppState {
-    db: sqlx::SqlitePool,
+    db: db::Database,
     client: Option<Client>,
     bucket: Option<String>,
-}
-
-impl FromRef<AppState> for sqlx::SqlitePool {
-    fn from_ref(state: &AppState) -> Self {
-        state.db.clone()
-    }
 }
 
 #[tokio::main]
@@ -32,8 +25,10 @@ async fn main() {
 
     let config = config::Config::from_env();
 
-    let pool = db::create_pool(&config.database_url).await;
-    db::run_migrations(&pool).await;
+    let database = db::create_database(&config.database_url).await;
+    db::run_migrations(&database)
+        .await
+        .expect("Failed to run migrations");
 
     let (client, bucket) =
         if let (Some(account_id), Some(access_key), Some(secret_key), Some(bucket_name)) = (
@@ -62,7 +57,7 @@ async fn main() {
         };
 
     let state = AppState {
-        db: pool,
+        db: database,
         client,
         bucket: bucket.cloned(),
     };
@@ -134,8 +129,9 @@ async fn main() {
 async fn health_check(
     axum::extract::State(state): axum::extract::State<AppState>,
 ) -> Result<axum::Json<serde_json::Value>, axum::http::StatusCode> {
-    sqlx::query("SELECT 1")
-        .execute(&state.db)
+    state
+        .db
+        .execute("SELECT 1", &[])
         .await
         .map_err(|_| axum::http::StatusCode::SERVICE_UNAVAILABLE)?;
 

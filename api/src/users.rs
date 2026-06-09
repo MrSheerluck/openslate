@@ -3,27 +3,34 @@ use axum_extra::extract::cookie::{Cookie, CookieJar};
 use jsonwebtoken::{EncodingKey, Header, encode};
 use serde::Deserialize;
 use serde_json::json;
-use sqlx::SqlitePool;
 use time::{Duration, OffsetDateTime};
 use uuid::Uuid;
 
 use crate::auth;
+use crate::db::{self, Database, FromRow, Row};
 
 #[derive(Deserialize)]
 pub struct AuthBody {
     pub password: String,
 }
 
-#[derive(sqlx::FromRow)]
 struct UserRow {
     #[allow(dead_code)]
     id: String,
     password_hash: String,
 }
 
-pub async fn user_count(pool: &SqlitePool) -> i64 {
-    sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM users")
-        .fetch_one(pool)
+impl FromRow for UserRow {
+    fn from_row(row: &Row) -> db::DbResult<Self> {
+        Ok(Self {
+            id: row.str("id")?,
+            password_hash: row.str("password_hash")?,
+        })
+    }
+}
+
+pub async fn user_count(db: &Database) -> i64 {
+    db.scalar_i64("SELECT COUNT(*) FROM users", &[])
         .await
         .unwrap_or(0)
 }
@@ -33,8 +40,8 @@ pub async fn status(state: axum::extract::State<crate::AppState>) -> Json<serde_
     Json(serde_json::json!({ "has_users": count > 0 }))
 }
 
-pub async fn create_first_user(pool: &SqlitePool, password: &str) -> Result<(), StatusCode> {
-    let count = user_count(pool).await;
+pub async fn create_first_user(db: &Database, password: &str) -> Result<(), StatusCode> {
+    let count = user_count(db).await;
     if count > 0 {
         return Err(StatusCode::CONFLICT);
     }
@@ -42,19 +49,18 @@ pub async fn create_first_user(pool: &SqlitePool, password: &str) -> Result<(), 
     let hash = bcrypt::hash(password, bcrypt::DEFAULT_COST)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    sqlx::query("INSERT INTO users (id, username, password_hash) VALUES (?, 'admin', ?)")
-        .bind(Uuid::new_v4().to_string())
-        .bind(&hash)
-        .execute(pool)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    db.execute(
+        "INSERT INTO users (id, username, password_hash) VALUES (?, 'admin', ?)",
+        &[Uuid::new_v4().to_string().into(), hash.into()],
+    )
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(())
 }
 
-async fn get_user(pool: &SqlitePool) -> Result<UserRow, StatusCode> {
-    sqlx::query_as::<_, UserRow>("SELECT id, password_hash FROM users LIMIT 1")
-        .fetch_optional(pool)
+async fn get_user(db: &Database) -> Result<UserRow, StatusCode> {
+    db.row_opt::<UserRow>("SELECT id, password_hash FROM users LIMIT 1", &[])
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::UNAUTHORIZED)
@@ -121,9 +127,12 @@ pub async fn change_password(
     let hash = bcrypt::hash(&body.password, bcrypt::DEFAULT_COST)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    sqlx::query("UPDATE users SET password_hash = ?, updated_at = datetime('now')")
-        .bind(&hash)
-        .execute(&state.db)
+    state
+        .db
+        .execute(
+            "UPDATE users SET password_hash = ?, updated_at = datetime('now')",
+            &[hash.into()],
+        )
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 

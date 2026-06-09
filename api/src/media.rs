@@ -5,10 +5,10 @@ use axum::{
     response::Response,
 };
 use serde::{Deserialize, Serialize};
-use sqlx::{QueryBuilder, SqlitePool};
 use uuid::Uuid;
 
 use crate::AppState;
+use crate::db::{self, Database, DbParam, FromRow, Row};
 use s3::Client;
 
 fn storage(state: &AppState) -> Result<(&Client, &str), StatusCode> {
@@ -18,7 +18,7 @@ fn storage(state: &AppState) -> Result<(&Client, &str), StatusCode> {
     }
 }
 
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub struct MediaRow {
     id: String,
     filename: String,
@@ -27,6 +27,20 @@ pub struct MediaRow {
     size: i64,
     note_id: Option<String>,
     created_at: String,
+}
+
+impl FromRow for MediaRow {
+    fn from_row(row: &Row) -> db::DbResult<Self> {
+        Ok(Self {
+            id: row.str("id")?,
+            filename: row.str("filename")?,
+            original_name: row.str("original_name")?,
+            mime_type: row.str("mime_type")?,
+            size: row.i64("size")?,
+            note_id: row.opt_str("note_id")?,
+            created_at: row.str("created_at")?,
+        })
+    }
 }
 
 #[derive(Serialize)]
@@ -86,51 +100,50 @@ fn ext_from_mime(mime: &str) -> &str {
     }
 }
 
-async fn get_media_tags(pool: &SqlitePool, media_id: &str) -> Vec<String> {
-    sqlx::query_scalar::<_, String>(
+async fn get_media_tags(db: &Database, media_id: &str) -> Vec<String> {
+    db.scalar_str_all(
         "SELECT t.name FROM tags t
          JOIN media_tags mt ON mt.tag_id = t.id
          WHERE mt.media_id = ? ORDER BY t.name",
+        &[media_id.into()],
     )
-    .bind(media_id)
-    .fetch_all(pool)
     .await
     .unwrap_or_default()
 }
 
-async fn set_media_tags(pool: &SqlitePool, media_id: &str, tags: Option<Vec<String>>) {
+async fn set_media_tags(db: &Database, media_id: &str, tags: Option<Vec<String>>) {
     let Some(tags) = tags else { return };
 
-    sqlx::query("DELETE FROM media_tags WHERE media_id = ?")
-        .bind(media_id)
-        .execute(pool)
-        .await
-        .ok();
+    db.execute(
+        "DELETE FROM media_tags WHERE media_id = ?",
+        &[media_id.into()],
+    )
+    .await
+    .ok();
 
     for name in &tags {
         let name = name.trim();
         if name.is_empty() {
             continue;
         }
-        sqlx::query("INSERT OR IGNORE INTO tags (id, name) VALUES (?, ?)")
-            .bind(Uuid::new_v4().to_string())
-            .bind(name)
-            .execute(pool)
-            .await
-            .ok();
+        db.execute(
+            "INSERT OR IGNORE INTO tags (id, name) VALUES (?, ?)",
+            &[Uuid::new_v4().to_string().into(), name.into()],
+        )
+        .await
+        .ok();
 
-        if let Some(tag_id) = sqlx::query_scalar::<_, String>("SELECT id FROM tags WHERE name = ?")
-            .bind(name)
-            .fetch_optional(pool)
+        if let Some(tag_id) = db
+            .scalar_str_opt("SELECT id FROM tags WHERE name = ?", &[name.into()])
             .await
             .unwrap_or(None)
         {
-            sqlx::query("INSERT OR IGNORE INTO media_tags (media_id, tag_id) VALUES (?, ?)")
-                .bind(media_id)
-                .bind(tag_id)
-                .execute(pool)
-                .await
-                .ok();
+            db.execute(
+                "INSERT OR IGNORE INTO media_tags (media_id, tag_id) VALUES (?, ?)",
+                &[media_id.into(), tag_id.into()],
+            )
+            .await
+            .ok();
         }
     }
 }
@@ -196,18 +209,21 @@ pub async fn upload_media(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    sqlx::query(
-        "INSERT INTO media (id, filename, original_name, mime_type, size, note_id) VALUES (?, ?, ?, ?, ?, ?)",
-    )
-    .bind(&id)
-    .bind(&filename)
-    .bind(&original_name)
-    .bind(&mime_type)
-    .bind(bytes.len() as i64)
-    .bind(&note_id)
-    .execute(&state.db)
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    state
+        .db
+        .execute(
+            "INSERT INTO media (id, filename, original_name, mime_type, size, note_id) VALUES (?, ?, ?, ?, ?, ?)",
+            &[
+                id.as_str().into(),
+                filename.as_str().into(),
+                original_name.as_str().into(),
+                mime_type.as_str().into(),
+                (bytes.len() as i64).into(),
+                note_id.into(),
+            ],
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     set_media_tags(&state.db, &id, tags).await;
 
@@ -221,41 +237,41 @@ pub async fn list_media(
     State(state): State<AppState>,
     Query(params): Query<ListMediaParams>,
 ) -> Result<Json<Vec<MediaItem>>, StatusCode> {
-    let mut builder: QueryBuilder<sqlx::Sqlite> = QueryBuilder::new(
+    let mut sql = String::from(
         "SELECT m.id, m.filename, m.original_name, m.mime_type, m.size, m.note_id, m.created_at FROM media m",
     );
+    let mut db_params: Vec<DbParam> = Vec::new();
 
-    let mut has_where = false;
     if let Some(ref type_filter) = params.r#type {
-        builder.push(" WHERE m.mime_type LIKE ");
-        builder.push_bind(format!("{}%", type_filter));
-        has_where = true;
+        sql.push_str(" WHERE m.mime_type LIKE ?");
+        db_params.push(format!("{}%", type_filter).into());
     }
+
     if let Some(ref note_id) = params.note_id {
-        if has_where {
-            builder.push(" AND m.note_id = ");
+        if db_params.is_empty() {
+            sql.push_str(" WHERE m.note_id = ?");
         } else {
-            builder.push(" WHERE m.note_id = ");
-            has_where = true;
+            sql.push_str(" AND m.note_id = ?");
         }
-        builder.push_bind(note_id);
-    }
-    if let Some(ref q) = params.q
-        && !q.is_empty()
-    {
-        if has_where {
-            builder.push(" AND m.original_name LIKE ");
-        } else {
-            builder.push(" WHERE m.original_name LIKE ");
-        }
-        builder.push_bind(format!("%{}%", q));
+        db_params.push(note_id.as_str().into());
     }
 
-    builder.push(" ORDER BY m.created_at DESC LIMIT 50");
+    if let Some(ref q) = params.q {
+        if !q.is_empty() {
+            if db_params.is_empty() {
+                sql.push_str(" WHERE m.original_name LIKE ?");
+            } else {
+                sql.push_str(" AND m.original_name LIKE ?");
+            }
+            db_params.push(format!("%{}%", q).into());
+        }
+    }
 
-    let rows: Vec<MediaRow> = builder
-        .build_query_as()
-        .fetch_all(&state.db)
+    sql.push_str(" ORDER BY m.created_at DESC LIMIT 50");
+
+    let rows = state
+        .db
+        .row_all::<MediaRow>(&sql, &db_params)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -281,14 +297,15 @@ pub async fn get_media(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<MediaItem>, StatusCode> {
-    let row = sqlx::query_as::<_, MediaRow>(
-        "SELECT id, filename, original_name, mime_type, size, note_id, created_at FROM media WHERE id = ?",
-    )
-    .bind(&id)
-    .fetch_optional(&state.db)
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-    .ok_or(StatusCode::NOT_FOUND)?;
+    let row = state
+        .db
+        .row_opt::<MediaRow>(
+            "SELECT id, filename, original_name, mime_type, size, note_id, created_at FROM media WHERE id = ?",
+            &[id.as_str().into()],
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
 
     let tags = get_media_tags(&state.db, &row.id).await;
 
@@ -308,14 +325,15 @@ pub async fn serve_media_file(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Response, StatusCode> {
-    let row = sqlx::query_as::<_, MediaRow>(
-        "SELECT id, filename, original_name, mime_type, size, note_id, created_at FROM media WHERE id = ?",
-    )
-    .bind(&id)
-    .fetch_optional(&state.db)
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-    .ok_or(StatusCode::NOT_FOUND)?;
+    let row = state
+        .db
+        .row_opt::<MediaRow>(
+            "SELECT id, filename, original_name, mime_type, size, note_id, created_at FROM media WHERE id = ?",
+            &[id.as_str().into()],
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
 
     let key = format!("media/{}", row.filename);
     let (client, bucket) = storage(&state)?;
@@ -346,18 +364,19 @@ pub async fn delete_media(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, StatusCode> {
-    let row = sqlx::query_as::<_, MediaRow>(
-        "SELECT id, filename, original_name, mime_type, size, note_id, created_at FROM media WHERE id = ?",
-    )
-    .bind(&id)
-    .fetch_optional(&state.db)
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-    .ok_or(StatusCode::NOT_FOUND)?;
+    let row = state
+        .db
+        .row_opt::<MediaRow>(
+            "SELECT id, filename, original_name, mime_type, size, note_id, created_at FROM media WHERE id = ?",
+            &[id.as_str().into()],
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
 
-    sqlx::query("DELETE FROM media WHERE id = ?")
-        .bind(&id)
-        .execute(&state.db)
+    state
+        .db
+        .execute("DELETE FROM media WHERE id = ?", &[id.as_str().into()])
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -374,25 +393,28 @@ pub async fn update_media(
     Path(id): Path<String>,
     Json(body): Json<UpdateMediaBody>,
 ) -> Result<Json<MediaItem>, StatusCode> {
-    let existing = sqlx::query_as::<_, MediaRow>(
-        "SELECT id, filename, original_name, mime_type, size, note_id, created_at FROM media WHERE id = ?",
-    )
-    .bind(&id)
-    .fetch_optional(&state.db)
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-    .ok_or(StatusCode::NOT_FOUND)?;
+    let existing = state
+        .db
+        .row_opt::<MediaRow>(
+            "SELECT id, filename, original_name, mime_type, size, note_id, created_at FROM media WHERE id = ?",
+            &[id.as_str().into()],
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
 
     if let Some(ref note_id) = body.note_id {
-        let new_note_id = if note_id.is_empty() {
-            None
+        let new_note_id: DbParam = if note_id.is_empty() {
+            DbParam::Null
         } else {
-            Some(note_id.clone())
+            note_id.as_str().into()
         };
-        sqlx::query("UPDATE media SET note_id = ? WHERE id = ?")
-            .bind(&new_note_id)
-            .bind(&id)
-            .execute(&state.db)
+        state
+            .db
+            .execute(
+                "UPDATE media SET note_id = ? WHERE id = ?",
+                &[new_note_id, id.as_str().into()],
+            )
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     }
@@ -504,23 +526,26 @@ pub async fn import_from_url(
 
     let note_id = body.note_id.filter(|n| !n.is_empty());
 
-    sqlx::query(
-        "INSERT INTO media (id, filename, original_name, mime_type, size, note_id) VALUES (?, ?, ?, ?, ?, ?)",
-    )
-    .bind(&id)
-    .bind(&filename)
-    .bind(&original_name)
-    .bind(&mime_type)
-    .bind(bytes.len() as i64)
-    .bind(&note_id)
-    .execute(&state.db)
-    .await
-    .map_err(|_| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": "Database error"})),
+    state
+        .db
+        .execute(
+            "INSERT INTO media (id, filename, original_name, mime_type, size, note_id) VALUES (?, ?, ?, ?, ?, ?)",
+            &[
+                id.as_str().into(),
+                filename.as_str().into(),
+                original_name.as_str().into(),
+                mime_type.as_str().into(),
+                (bytes.len() as i64).into(),
+                note_id.into(),
+            ],
         )
-    })?;
+        .await
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Database error"})),
+            )
+        })?;
 
     let tags = body.tags.map(|t| {
         t.split(',')
