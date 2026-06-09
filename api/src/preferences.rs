@@ -24,9 +24,7 @@ impl FromRow for PrefRow {
     }
 }
 
-pub async fn get_preferences(
-    State(state): State<AppState>,
-) -> Result<Json<Value>, StatusCode> {
+pub async fn get_preferences(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
     let rows = state
         .db
         .row_all::<PrefRow>("SELECT key, value FROM preferences", &[])

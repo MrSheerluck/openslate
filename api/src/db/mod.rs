@@ -1,10 +1,10 @@
-mod sqlx_db;
 #[cfg(feature = "backend-turso")]
 mod libsql_db;
+mod sqlx_db;
 
-pub use sqlx_db::SqlxDatabase;
 #[cfg(feature = "backend-turso")]
 pub use libsql_db::LibsqlDatabase;
+pub use sqlx_db::SqlxDatabase;
 
 pub type DbResult<T> = Result<T, DbError>;
 
@@ -272,12 +272,6 @@ const MIGRATIONS: &[(&str, &str)] = &[
         include_str!("../../migrations/002_preferences.sql"),
     ),
     ("003_fts", include_str!("../../migrations/003_fts.sql")),
-    (
-        "004_media",
-        include_str!("../../migrations/004_media.sql"),
-    ),
-    (
-        "005_users",
-        include_str!("../../migrations/005_users.sql"),
-    ),
+    ("004_media", include_str!("../../migrations/004_media.sql")),
+    ("005_users", include_str!("../../migrations/005_users.sql")),
 ];

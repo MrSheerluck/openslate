@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use uuid::Uuid;
 
-use crate::db::{self, Database, DbParam, FromRow, Row};
 use crate::AppState;
+use crate::db::{self, Database, DbParam, FromRow, Row};
 
 #[derive(Serialize)]
 struct NoteRow {
@@ -203,12 +203,9 @@ async fn update_wikilinks(db: &Database, note_id: &str, content: &str) {
 async fn set_note_tags(db: &Database, note_id: &str, tags: Option<Vec<String>>) {
     let Some(tags) = tags else { return };
 
-    db.execute(
-        "DELETE FROM note_tags WHERE note_id = ?",
-        &[note_id.into()],
-    )
-    .await
-    .ok();
+    db.execute("DELETE FROM note_tags WHERE note_id = ?", &[note_id.into()])
+        .await
+        .ok();
 
     for name in &tags {
         let name = name.trim();
