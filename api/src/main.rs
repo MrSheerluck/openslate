@@ -141,3 +141,28 @@ async fn health_check(
 
     Ok(axum::Json(serde_json::json!({ "status": "ok" })))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::extract::State;
+    use sqlx::SqlitePool;
+
+    async fn setup_db() -> SqlitePool {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("../migrations").run(&pool).await.unwrap();
+        pool
+    }
+
+    #[tokio::test]
+    async fn test_health_check_ok() {
+        let db = setup_db().await;
+        let state = AppState { db, client: None, bucket: None };
+
+        let result = health_check(State(state)).await;
+        assert!(result.is_ok());
+
+        let json = result.unwrap();
+        assert_eq!(json.get("status").unwrap(), &serde_json::json!("ok"));
+    }
+}
