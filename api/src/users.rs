@@ -132,10 +132,10 @@ pub async fn change_password(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use axum::extract::State;
     use serial_test::serial;
-    use sqlx::SqlitePool;
+
+    use super::*;
 
     async fn setup_db() -> SqlitePool {
         let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
@@ -151,11 +151,12 @@ mod tests {
         }
     }
 
-    // #105
     #[tokio::test]
     #[serial]
     async fn test_status_after_signup() {
-        unsafe { std::env::set_var("JWT_SECRET", "test_secret") };
+        unsafe {
+            std::env::set_var("JWT_SECRET", "test_secret");
+        }
         let db = setup_db().await;
         let state = app_state(db);
         let jar = CookieJar::default();
