@@ -155,4 +155,29 @@ mod tests {
     fn test_fts_short_word() {
         assert_eq!(build_fts_query("hi"), "hi");
     }
+
+    #[test]
+    fn test_fts_long_word() {
+        assert_eq!(build_fts_query("hello"), "hello*");
+    }
+
+    #[test]
+    fn test_fts_multi_word() {
+        assert_eq!(build_fts_query("hello world"), "hello* world*");
+    }
+
+    #[test]
+    fn test_fts_mixed_lengths() {
+        assert_eq!(build_fts_query("ab test"), "ab test*");
+    }
+
+    #[test]
+    fn test_fts_empty_string() {
+        assert_eq!(build_fts_query(""), "");
+    }
+
+    #[test]
+    fn test_fts_quoted_phrase() {
+        assert_eq!(build_fts_query("\"hello world\""), "hello* world*");
+    }
 }

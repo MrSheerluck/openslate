@@ -838,11 +838,154 @@ mod tests {
         pool
     }
 
+    async fn create_test_note(
+        db: &SqlitePool,
+        title: &str,
+        content: &str,
+        tags: Option<Vec<String>>,
+    ) -> NoteResponse {
+        let body = CreateNote {
+            title: title.into(),
+            content: Some(content.into()),
+            tags,
+        };
+        let (_, json) = create_note(State(db.clone()), Json(body)).await.unwrap();
+        json.0
+    }
+
+    #[tokio::test]
+    async fn test_list_notes_empty() {
+        let db = setup_db().await;
+        let result = list_notes(State(db)).await.unwrap();
+        assert!(result.0.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_create_note_returns_201_and_slug() {
+        let db = setup_db().await;
+        let body = CreateNote {
+            title: "My Note".into(),
+            content: Some("Hello".into()),
+            tags: None,
+        };
+        let (status, json) = create_note(State(db), Json(body)).await.unwrap();
+        assert_eq!(status, StatusCode::CREATED);
+        assert_eq!(json.slug, "my-note");
+    }
+
+    #[tokio::test]
+    async fn test_get_note_by_slug_returns_full_note() {
+        let db = setup_db().await;
+        let note = create_test_note(&db, "Test Note", "Body content", None).await;
+        let result = get_note(State(db), Path(note.slug.clone())).await.unwrap();
+        assert_eq!(result.slug, note.slug);
+        assert_eq!(result.title, "Test Note");
+        assert_eq!(result.content, "Body content");
+    }
+
     #[tokio::test]
     async fn test_get_note_not_found() {
         let db = setup_db().await;
         let result = get_note(State(db), Path("nope".into())).await;
         assert!(matches!(result, Err(StatusCode::NOT_FOUND)));
+    }
+
+    #[tokio::test]
+    async fn test_list_notes_ordered_by_newest() {
+        let db = setup_db().await;
+        create_test_note(&db, "Alpha", "", None).await;
+        create_test_note(&db, "Beta", "", None).await;
+        let result = list_notes(State(db)).await.unwrap();
+        assert_eq!(result.0.len(), 2);
+        let titles: Vec<&str> = result.0.iter().map(|n| n.title.as_str()).collect();
+        assert!(titles.contains(&"Alpha"));
+        assert!(titles.contains(&"Beta"));
+    }
+
+    #[tokio::test]
+    async fn test_update_note_title_changes_slug() {
+        let db = setup_db().await;
+        let note = create_test_note(&db, "Old Title", "", None).await;
+        let body = UpdateNote {
+            title: Some("New Title".into()),
+            content: None,
+            tags: None,
+        };
+        let updated = update_note(State(db.clone()), Path(note.slug.clone()), Json(body))
+            .await
+            .unwrap();
+        assert_eq!(updated.title, "New Title");
+        assert_eq!(updated.slug, "new-title");
+    }
+
+    #[tokio::test]
+    async fn test_update_note_content_only_keeps_slug() {
+        let db = setup_db().await;
+        let note = create_test_note(&db, "Stable", "Original", None).await;
+        let body = UpdateNote {
+            title: None,
+            content: Some("Updated content".into()),
+            tags: None,
+        };
+        let updated = update_note(State(db.clone()), Path(note.slug.clone()), Json(body))
+            .await
+            .unwrap();
+        assert_eq!(updated.slug, "stable");
+        assert_eq!(updated.content, "Updated content");
+    }
+
+    #[tokio::test]
+    async fn test_update_note_returns_404_for_nonexistent_slug() {
+        let db = setup_db().await;
+        let body = UpdateNote {
+            title: Some("Whatever".into()),
+            content: None,
+            tags: None,
+        };
+        let result = update_note(State(db), Path("nonexistent".into()), Json(body)).await;
+        assert!(matches!(result, Err(StatusCode::NOT_FOUND)));
+    }
+
+    #[tokio::test]
+    async fn test_delete_note_removes_note_from_list() {
+        let db = setup_db().await;
+        let note = create_test_note(&db, "To Delete", "", None).await;
+        let status = delete_note(State(db.clone()), Path(note.slug.clone()))
+            .await
+            .unwrap();
+        assert_eq!(status, StatusCode::NO_CONTENT);
+        let list = list_notes(State(db)).await.unwrap();
+        assert!(list.0.iter().all(|n| n.slug != note.slug));
+    }
+
+    #[tokio::test]
+    async fn test_delete_note_returns_404_for_nonexistent_slug() {
+        let db = setup_db().await;
+        let result = delete_note(State(db), Path("nonexistent".into())).await;
+        assert!(matches!(result, Err(StatusCode::NOT_FOUND)));
+    }
+
+    #[tokio::test]
+    async fn test_duplicate_title_gets_unique_slug() {
+        let db = setup_db().await;
+        create_test_note(&db, "My Note", "", None).await;
+        let note2 = create_test_note(&db, "My Note", "", None).await;
+        assert_eq!(note2.slug, "my-note-1");
+    }
+
+    #[tokio::test]
+    async fn test_create_note_with_tags_stores_and_returns_tags() {
+        let db = setup_db().await;
+        let tags = vec!["rust".into(), "testing".into()];
+        let body = CreateNote {
+            title: "Tagged Note".into(),
+            content: None,
+            tags: Some(tags),
+        };
+        let (_, json) = create_note(State(db), Json(body)).await.unwrap();
+        assert!(!json.tags.is_empty());
+        assert!(json.tags.contains(&"rust".to_string()));
+        assert!(json.tags.contains(&"testing".to_string()));
     }
 
     #[test]

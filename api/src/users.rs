@@ -195,6 +195,143 @@ mod tests {
         let Json(json) = status(State(state)).await;
         assert_eq!(json["has_users"], false);
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_signin_correct_password_returns_cookie() {
+        let db = setup_db().await;
+        let state = app_state(db.clone());
+        let jar = CookieJar::new();
+
+        temp_env::async_with_vars([("JWT_SECRET", Some("test_secret"))], async {
+            let _ = signup(
+                jar.clone(),
+                State(state.clone()),
+                Json(AuthBody {
+                    password: "secret".into(),
+                }),
+            )
+            .await
+            .unwrap();
+        })
+        .await;
+
+        let jar2 = CookieJar::new();
+        let result = temp_env::async_with_vars([("JWT_SECRET", Some("test_secret"))], async {
+            signin(
+                jar2.clone(),
+                State(state.clone()),
+                Json(AuthBody {
+                    password: "secret".into(),
+                }),
+            )
+            .await
+        })
+        .await;
+        assert!(result.is_ok());
+        let (jar_result, _) = result.unwrap();
+        assert!(jar_result.get("token").is_some());
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_signin_wrong_password_returns_401() {
+        let db = setup_db().await;
+        let state = app_state(db.clone());
+        let jar = CookieJar::new();
+
+        temp_env::async_with_vars([("JWT_SECRET", Some("test_secret"))], async {
+            let _ = signup(
+                jar,
+                State(state.clone()),
+                Json(AuthBody {
+                    password: "correct".into(),
+                }),
+            )
+            .await
+            .unwrap();
+        })
+        .await;
+
+        let jar2 = CookieJar::new();
+        let result = temp_env::async_with_vars([("JWT_SECRET", Some("test_secret"))], async {
+            signin(
+                jar2,
+                State(state.clone()),
+                Json(AuthBody {
+                    password: "wrong".into(),
+                }),
+            )
+            .await
+        })
+        .await;
+        assert_eq!(result.unwrap_err(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_change_password_makes_old_invalid_and_new_works() {
+        let db = setup_db().await;
+        let state = app_state(db.clone());
+
+        temp_env::async_with_vars([("JWT_SECRET", Some("test_secret"))], async {
+            let jar = CookieJar::new();
+            let _ = signup(
+                jar,
+                State(state.clone()),
+                Json(AuthBody {
+                    password: "oldpass".into(),
+                }),
+            )
+            .await
+            .unwrap();
+        })
+        .await;
+
+        temp_env::async_with_vars([("JWT_SECRET", Some("test_secret"))], async {
+            let _ = change_password(
+                State(state.clone()),
+                Json(AuthBody {
+                    password: "newpass".into(),
+                }),
+            )
+            .await
+            .unwrap();
+        })
+        .await;
+
+        // old password should no longer work
+        let jar = CookieJar::new();
+        let result = temp_env::async_with_vars([("JWT_SECRET", Some("test_secret"))], async {
+            signin(
+                jar,
+                State(state.clone()),
+                Json(AuthBody {
+                    password: "oldpass".into(),
+                }),
+            )
+            .await
+        })
+        .await;
+        assert_eq!(result.unwrap_err(), StatusCode::UNAUTHORIZED);
+
+        // new password should work
+        let jar2 = CookieJar::new();
+        let result = temp_env::async_with_vars([("JWT_SECRET", Some("test_secret"))], async {
+            signin(
+                jar2,
+                State(state.clone()),
+                Json(AuthBody {
+                    password: "newpass".into(),
+                }),
+            )
+            .await
+        })
+        .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
     #[serial]
     async fn test_signup_conflict() {
         let db = setup_db().await;

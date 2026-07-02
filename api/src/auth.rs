@@ -64,6 +64,16 @@ mod tests {
 
     #[tokio::test]
     #[serial]
+    async fn test_logout_clears_cookie() {
+        let jar = CookieJar::new();
+        let (jar, _) = logout(jar).await;
+        let cookie = jar.get("token").unwrap();
+        assert_eq!(cookie.value(), "");
+        assert_eq!(cookie.max_age(), Some(Duration::seconds(0)));
+    }
+
+    #[tokio::test]
+    #[serial]
     async fn test_me_returns_authenticated() {
         let response = me().await;
         assert_eq!(response.0.get("authenticated"), Some(&json!(true)));
