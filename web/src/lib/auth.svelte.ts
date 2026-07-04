@@ -10,6 +10,10 @@ export function isLoading(): boolean {
   return authenticated === null;
 }
 
+export function setUnauthenticated() {
+  authenticated = false;
+}
+
 export async function checkAuth(): Promise<void> {
   try {
     const res = await api("/api/auth/me");

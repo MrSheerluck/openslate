@@ -1,5 +1,29 @@
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
+export type InterceptorResponse = (response: Response) => Response;
+
+class InterceptorManager {
+  handlers: InterceptorResponse[];
+
+  constructor() {
+    this.handlers = [];
+  }
+
+  use(response: InterceptorResponse) {
+    this.handlers.push(response);
+    return this.handlers.length - 1;
+  }
+
+  clear() {
+    if (this.handlers) {
+      this.handlers = [];
+    }
+  }
+}
+
+export type Interceptors = { response: InterceptorManager };
+export const interceptors: Interceptors = { response: new InterceptorManager() };
+
 export async function api(path: string, init?: RequestInit): Promise<Response> {
   const headers: Record<string, string> = {
     ...(init?.headers as Record<string, string>),
@@ -12,6 +36,9 @@ export async function api(path: string, init?: RequestInit): Promise<Response> {
     credentials: "include",
     headers,
   });
+  for (const handler of interceptors.response.handlers) {
+    handler(res);
+  }
   return res;
 }
 
