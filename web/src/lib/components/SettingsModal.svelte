@@ -204,23 +204,34 @@
             <label class="text-xs block mb-1.5" for="password-input" style="color: var(--text-secondary);">New password</label>
             <input
               id="password-input"
-              value={currentUser.password}
-              oninput={(e) => {currentUser.password = e.target.value;} }
+              bind:value={currentUser.password}
               type="password"
+              disabled={currentUser.loading}
               class="w-full text-xs px-2 py-1.5 rounded border outline-none"
               style="color: var(--text-primary); background: var(--bg-editor); border-color: var(--border-input);"
             />
           </div>
+
+          {#if currentUser.errorMessage}
+            <p
+              class="text-sm font-semibold mt-3"
+              style="color: var(--text-danger);"
+              role="alert"
+            >
+              {currentUser.errorMessage}
+            </p>
+          {/if}
 
           <!-- Change password -->
           <div class="mb-3">
           <button
               type="button"
               onclick={() => { user.setPassword(currentUser.password); }}
+              disabled={currentUser.loading}
               class="mt-2 text-xs px-3 py-1.5 rounded cursor-pointer inline-flex items-center gap-1.5"
               style="color: var(--text-btn-primary); background: var(--bg-btn-primary); border: none;"
             >
-              Change password
+              {currentUser.loading ? "Loading..." : "Change password" }
           </button>
           </div>
         </section>

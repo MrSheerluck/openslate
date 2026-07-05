@@ -1,6 +1,6 @@
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
-export type InterceptorResponse = (response: Response) => Response;
+export type InterceptorResponse = (response: Response) => void;
 
 class InterceptorManager {
   handlers: InterceptorResponse[];

@@ -16,7 +16,6 @@
       if (r.status === 401) {
         auth.setUnauthenticated();
       }
-      return r;
     });
   });
 

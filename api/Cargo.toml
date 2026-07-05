@@ -23,7 +23,7 @@ dotenvy = "0.15"
 axum-extra = { version = "0.10", features = ["cookie"] }
 jsonwebtoken = "9"
 bcrypt = "0.16"
-time = { version = "0.3", features = ["serde"] }
+time = { version = "0.3", features = ["macros", "parsing", "serde"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
