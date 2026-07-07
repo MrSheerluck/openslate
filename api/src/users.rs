@@ -66,8 +66,8 @@ fn create_auth_cookie(secret: &str) -> Result<Cookie<'static>, StatusCode> {
 
     let claims = auth::Claims {
         sub: "admin".into(),
-        exp: exp.unix_timestamp() as usize,
-        iat: now.unix_timestamp() as usize,
+        exp: exp.unix_timestamp(),
+        iat: now.unix_timestamp(),
     };
 
     let token = encode(

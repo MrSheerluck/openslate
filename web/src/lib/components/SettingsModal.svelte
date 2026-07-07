@@ -11,6 +11,7 @@
     AlertCircle,
     LoaderCircle,
   } from "@lucide/svelte";
+  import * as user from "$lib/user.svelte";
   import * as prefs from "$lib/preferences.svelte";
   import * as theme from "$lib/theme.svelte";
   import { uploadFiles, downloadFile } from "$lib/api";
@@ -25,6 +26,7 @@
     onImported?: (count: number) => void | Promise<void>;
   } = $props();
 
+  let currentUser = $derived(user.getUser());
   let currentPrefs = $derived(prefs.getPreferences());
   let currentTheme = $derived(theme.getTheme());
 
@@ -193,6 +195,47 @@
       </div>
 
       <div class="px-5 py-4 space-y-5">
+        <!-- Profile -->
+        <section>
+          <h3 class="text-sm font-semibold mb-3" style="color: var(--text-primary);">Profile</h3>
+
+          <!-- New password -->
+          <div class="mb-3">
+            <label class="text-xs block mb-1.5" for="password-input" style="color: var(--text-secondary);">New password</label>
+            <input
+              id="password-input"
+              bind:value={currentUser.password}
+              type="password"
+              disabled={currentUser.loading}
+              class="w-full text-xs px-2 py-1.5 rounded border outline-none"
+              style="color: var(--text-primary); background: var(--bg-editor); border-color: var(--border-input);"
+            />
+          </div>
+
+          {#if currentUser.errorMessage}
+            <p
+              class="text-sm font-semibold mt-3"
+              style="color: var(--text-danger);"
+              role="alert"
+            >
+              {currentUser.errorMessage}
+            </p>
+          {/if}
+
+          <!-- Change password -->
+          <div class="mb-3">
+          <button
+              type="button"
+              onclick={() => { user.setPassword(currentUser.password); }}
+              disabled={currentUser.loading}
+              class="mt-2 text-xs px-3 py-1.5 rounded cursor-pointer inline-flex items-center gap-1.5"
+              style="color: var(--text-btn-primary); background: var(--bg-btn-primary); border: none;"
+            >
+              {currentUser.loading ? "Loading..." : "Change password" }
+          </button>
+          </div>
+        </section>
+
         <!-- Editor -->
         <section>
           <h3 class="text-sm font-semibold mb-3" style="color: var(--text-primary);">Editor</h3>

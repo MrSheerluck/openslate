@@ -3,10 +3,13 @@
   import { goto } from "$app/navigation";
   import { onMount } from "svelte";
   import { api } from "$lib/api";
+  import { loginFlashMessage } from '$lib/user.svelte';
 
   let password = $state("");
   let error = $state("");
   let isFirstRun = $state(true);
+  let passwordChangeMessage : null | string = loginFlashMessage.passwordChangeMessage;
+  loginFlashMessage.passwordChangeMessage = null;
 
   onMount(async () => {
     try {
@@ -41,6 +44,9 @@
     <h1 class="text-2xl font-bold" style="color: var(--text-primary);">openslate</h1>
     {#if isFirstRun}
       <p class="text-sm" style="color: var(--text-secondary);">Set your admin password to get started.</p>
+    {/if}
+    {#if passwordChangeMessage}
+      <p class="text-sm" style="color: var(--text-secondary);">{passwordChangeMessage}</p>
     {/if}
     <input
       type="password"
