@@ -633,4 +633,110 @@ mod tests {
         let result = get_media(State(state), Path("nonexistent".into())).await;
         assert_eq!(result.err().unwrap(), StatusCode::NOT_FOUND);
     }
+
+    #[tokio::test]
+    async fn test_list_media_filter_by_note_id() {
+        let db = setup_media_db().await;
+        sqlx::query("INSERT INTO notes (id, title, slug, content) VALUES ('note-1', 'Note 1', 'note-1', '')")
+            .execute(&db).await.unwrap();
+        sqlx::query("INSERT INTO notes (id, title, slug, content) VALUES ('note-2', 'Note 2', 'note-2', '')")
+            .execute(&db).await.unwrap();
+        sqlx::query(
+            "INSERT INTO media (id, filename, original_name, mime_type, size, note_id) VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind("m1").bind("f1.png").bind("f1.png").bind("image/png").bind(100i64).bind("note-1")
+        .execute(&db).await.unwrap();
+        sqlx::query(
+            "INSERT INTO media (id, filename, original_name, mime_type, size, note_id) VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind("m2").bind("f2.png").bind("f2.png").bind("image/png").bind(200i64).bind("note-2")
+        .execute(&db).await.unwrap();
+
+        let state = crate::AppState {
+            db,
+            client: None,
+            bucket: None,
+        };
+        let Json(items) = list_media(
+            State(state),
+            Query(ListMediaParams {
+                r#type: None,
+                note_id: Some("note-1".into()),
+                q: None,
+                _tags: None,
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].id, "m1");
+    }
+
+    #[test]
+    fn test_ext_from_mime_jpeg() {
+        assert_eq!(ext_from_mime("image/jpeg"), "jpg");
+    }
+
+    #[test]
+    fn test_ext_from_mime_png() {
+        assert_eq!(ext_from_mime("image/png"), "png");
+    }
+
+    #[test]
+    fn test_ext_from_mime_gif() {
+        assert_eq!(ext_from_mime("image/gif"), "gif");
+    }
+
+    #[test]
+    fn test_ext_from_mime_webp() {
+        assert_eq!(ext_from_mime("image/webp"), "webp");
+    }
+
+    #[test]
+    fn test_ext_from_mime_svg() {
+        assert_eq!(ext_from_mime("image/svg+xml"), "svg");
+    }
+
+    #[test]
+    fn test_ext_from_mime_mp4() {
+        assert_eq!(ext_from_mime("video/mp4"), "mp4");
+    }
+
+    #[test]
+    fn test_ext_from_mime_pdf() {
+        assert_eq!(ext_from_mime("application/pdf"), "pdf");
+    }
+
+    #[test]
+    fn test_ext_from_mime_unknown() {
+        assert_eq!(ext_from_mime("application/x-custom"), "bin");
+    }
+
+    #[test]
+    fn test_filename_from_url_simple() {
+        assert_eq!(
+            filename_from_url("https://example.com/photo.jpg"),
+            "photo.jpg"
+        );
+    }
+
+    #[test]
+    fn test_filename_from_url_with_query_string() {
+        assert_eq!(
+            filename_from_url("https://example.com/photo.jpg?w=800&h=600"),
+            "photo.jpg"
+        );
+    }
+
+    #[test]
+    fn test_filename_from_url_trailing_slash_falls_back_to_host() {
+        // With a trailing slash the last non-empty segment is the host.
+        assert_eq!(filename_from_url("https://example.com/"), "example.com");
+    }
+
+    #[test]
+    fn test_filename_from_url_without_filename_returns_untitled() {
+        // No usable path segment at all -> the "untitled" fallback kicks in.
+        assert_eq!(filename_from_url(""), "untitled");
+    }
 }
