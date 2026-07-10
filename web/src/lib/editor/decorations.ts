@@ -34,7 +34,6 @@ const HIDEABLE_SYNTAX = new Set([
   "CodeMark",
   "CodeInfo",
   "LinkMark",
-  "URL",
   "LinkTitle",
   "StrikethroughMark",
   "QuoteMark",
