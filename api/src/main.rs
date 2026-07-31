@@ -9,7 +9,8 @@ mod users;
 
 use axum::extract::FromRef;
 use axum::http::Method;
-use axum::{Router, middleware, routing::get};
+use axum::routing::{get, post, put};
+use axum::{Router, middleware};
 use s3::{Auth, Client, Credentials, providers};
 use tower_http::cors::AllowOrigin;
 
@@ -76,24 +77,18 @@ async fn main() {
     let public = Router::new()
         .route("/api/health", get(health_check))
         .route("/api/auth/status", get(users::status))
-        .route("/api/auth/signup", axum::routing::post(users::signup))
-        .route("/api/auth/signin", axum::routing::post(users::signin))
-        .route("/api/auth/logout", axum::routing::post(auth::logout));
+        .route("/api/auth/signup", post(users::signup))
+        .route("/api/auth/signin", post(users::signin))
+        .route("/api/auth/logout", post(auth::logout));
 
     let protected = Router::new()
         .route("/api/auth/me", get(auth::me))
-        .route(
-            "/api/auth/password",
-            axum::routing::put(users::change_password),
-        )
+        .route("/api/auth/password", put(users::change_password))
         .route(
             "/api/notes",
             get(notes::list_notes).post(notes::create_note),
         )
-        .route(
-            "/api/notes/import",
-            axum::routing::post(notes::import_notes),
-        )
+        .route("/api/notes/import", post(notes::import_notes))
         .route("/api/notes/export", get(notes::export_notes))
         .route("/api/notes/export-by-tag", get(notes::export_notes_by_tag))
         .route(
@@ -107,10 +102,7 @@ async fn main() {
             "/api/media",
             get(media::list_media).post(media::upload_media),
         )
-        .route(
-            "/api/media/from-url",
-            axum::routing::post(media::import_from_url),
-        )
+        .route("/api/media/from-url", post(media::import_from_url))
         .route(
             "/api/media/{id}",
             get(media::get_media)
